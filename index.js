@@ -4,6 +4,15 @@ const pressedNotes = new Map();
 
 const PRESSED_CLASS = "pressed";
 
+let octaveState = 3;
+
+const input = document.querySelector("input");
+input.addEventListener("input", updateValue);
+
+function updateValue(e) {
+  octaveState = e.target.value;
+}
+
 const setup = () => {
   mainGainNode.connect(audioContext.destination);
   mainGainNode.gain.value = 0.2;
@@ -14,6 +23,7 @@ const getHz = (note = "A", octave = 4) => {
   let N = 0;
 
   switch (note) {
+    default:
     case "A":
       N = 0;
       break;
@@ -55,17 +65,39 @@ const getHz = (note = "A", octave = 4) => {
     case "Ab":
       N = 11;
       break;
-    default:
-      return 0;
   }
 
   N += 12 * (octave - 4);
   return A4 * Math.pow(2, N / 12);
 };
 
-const playKey = (e) => {
+const handleKeyDown = (e) => {
   const key = e.key.toUpperCase();
   if (!key || pressedNotes.get(key)) {
+    return;
+  }
+
+  if (key === "Z" && octaveState > 1) {
+    input.value--;
+    octaveState--;
+  } else if (key === "X" && octaveState < 5) {
+    input.value++;
+    octaveState++;
+  } else {
+    playKey(key);
+  }
+};
+
+const handleKeyUp = (e) => {
+  const key = e.key.toUpperCase();
+  if (!key) {
+    return;
+  }
+  stopKey(key);
+};
+
+const playKey = (key) => {
+  if (!keys[key]) {
     return;
   }
 
@@ -97,7 +129,10 @@ const playKey = (e) => {
   osc.connect(noteGainNode);
   osc.type = "triangle";
 
-  const freq = keys[key].frequency;
+  const freq = getHz(
+    keys[key].note,
+    +octaveState + (keys[key].octaveOffset || 0)
+  );
   keys[key].element.classList.add(PRESSED_CLASS);
 
   if (Number.isFinite(freq)) {
@@ -107,8 +142,11 @@ const playKey = (e) => {
   pressedNotes.get(key).start();
 };
 
-const stopKey = (e) => {
-  const key = e.key.toUpperCase();
+const stopKey = (key) => {
+  if (!keys[key]) {
+    return;
+  }
+
   keys[key].element.classList.remove(PRESSED_CLASS);
 
   const osc = pressedNotes.get(key);
@@ -124,24 +162,37 @@ const getElementByNote = (note) =>
   note && document.querySelector(`[note="${note}"]`);
 
 const keys = {
-  A: { element: getElementByNote("C"), frequency: getHz("C") },
-  W: { element: getElementByNote("C#"), frequency: getHz("C#") },
-  S: { element: getElementByNote("D"), frequency: getHz("D") },
-  E: { element: getElementByNote("D#"), frequency: getHz("D#") },
-  D: { element: getElementByNote("E"), frequency: getHz("E") },
-  F: { element: getElementByNote("F"), frequency: getHz("F") },
-  T: { element: getElementByNote("F#"), frequency: getHz("F#") },
-  G: { element: getElementByNote("G"), frequency: getHz("G") },
-  Y: { element: getElementByNote("G#"), frequency: getHz("G#") },
-  H: { element: getElementByNote("A"), frequency: getHz("A", 5) },
-  U: { element: getElementByNote("A#"), frequency: getHz("A#", 5) },
-  J: { element: getElementByNote("B"), frequency: getHz("B", 5) },
-  K: { element: getElementByNote("C2"), frequency: getHz("C", 5) },
-  O: { element: getElementByNote("C#2"), frequency: getHz("C#", 5) },
-  L: { element: getElementByNote("D2"), frequency: getHz("D", 5) },
+  A: { element: getElementByNote("C"), note: "C", octaveOffset: 0 },
+  W: { element: getElementByNote("C#"), note: "C#", octaveOffset: 0 },
+  S: { element: getElementByNote("D"), note: "D", octaveOffset: 0 },
+  E: { element: getElementByNote("D#"), note: "D#", octaveOffset: 0 },
+  D: { element: getElementByNote("E"), note: "E", octaveOffset: 0 },
+  F: { element: getElementByNote("F"), note: "F", octaveOffset: 0 },
+  T: { element: getElementByNote("F#"), note: "F#", octaveOffset: 0 },
+  G: { element: getElementByNote("G"), note: "G", octaveOffset: 0 },
+  Y: { element: getElementByNote("G#"), note: "G#", octaveOffset: 0 },
+  H: { element: getElementByNote("A"), note: "A", octaveOffset: 1 },
+  U: { element: getElementByNote("A#"), note: "A#", octaveOffset: 1 },
+  J: { element: getElementByNote("B"), note: "B", octaveOffset: 1 },
+  K: { element: getElementByNote("C2"), note: "C", octaveOffset: 1 },
+  O: { element: getElementByNote("C#2"), note: "C#", octaveOffset: 1 },
+  L: { element: getElementByNote("D2"), note: "D", octaveOffset: 1 },
 };
 
 setup();
 
-document.addEventListener("keydown", playKey);
-document.addEventListener("keyup", stopKey);
+document.addEventListener("keydown", handleKeyDown);
+document.addEventListener("keyup", handleKeyUp);
+
+let clickedKey = "";
+
+for (const [key, { element }] of Object.entries(keys)) {
+  element.addEventListener("mousedown", () => {
+    playKey(key);
+    clickedKey = key;
+  });
+}
+
+document.addEventListener("mouseup", () => {
+  stopKey(clickedKey);
+});
